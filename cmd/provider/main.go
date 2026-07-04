@@ -2,83 +2,76 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/1amKhush/CIPHER/pkg/chunker"
+	"github.com/1amKhush/CIPHER/pkg/crypto"
+	"github.com/1amKhush/CIPHER/pkg/engine"
 	"github.com/1amKhush/CIPHER/pkg/logger"
 	"github.com/1amKhush/CIPHER/pkg/p2p"
-	"github.com/libp2p/go-libp2p/core/network"
 )
 
 func main() {
 	port := flag.Int("port", 9000, "Port to listen on")
 	flag.Parse()
 
-	// Initialize logger
-	logCfg := logger.DefaultConfig()
-	logCfg.Level = "debug"
-	if err := logger.Init(logCfg); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
-		os.Exit(1)
+	// 1. Create a dummy file for MVP
+	fileName := "test_file.txt"
+	dummyData := make([]byte, 100*1024) // 100 KB
+	rand.Read(dummyData)
+	os.WriteFile(fileName, dummyData, 0644)
+	logger.Info().Msgf("Created dummy file %s (100KB)", fileName)
+
+	// 2. Chunk the file
+	chunks, err := chunker.ChunkFile(fileName)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to chunk file")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// 3. Create Merkle Tree
+	var leaves [][32]byte
+	for _, c := range chunks {
+		var fileID [32]byte // zeroed
+		length := uint32(len(c.Data))
+		leaf := crypto.MerkleLeaf(fileID, c.Index, length, c.Data)
+		leaves = append(leaves, leaf)
+	}
+	tree := chunker.NewMerkleTree(leaves)
 
+	var fileID [32]byte // zeroed
+	store := &engine.ChunkStore{
+		FileID:     fileID,
+		Chunks:     chunks,
+		MerkleTree: tree,
+	}
+
+	rootHex := hex.EncodeToString(tree.Root[:])
+	logger.Info().Msgf("File processed. Chunks: %d, Root: %s", len(chunks), rootHex)
+
+	// 4. Start libp2p host
 	opts := p2p.HostOptions{
 		ListenPort:  *port,
 		PrivKeyPath: "provider_key.key",
 		EnableMDNS:  true,
 	}
-
-	h, err := p2p.NewHost(ctx, opts)
+	h, err := p2p.NewHost(context.Background(), opts)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to start provider host")
+		logger.Fatal().Err(err).Msg("Failed to start host")
 	}
 	defer h.Close()
 
-	logger.Info().Str("peer_id", h.ID().String()).Msg("Provider started")
-	
-	// Print listen addresses
-	fmt.Println("Listening on:")
-	for _, addr := range h.Addrs() {
-		fmt.Printf("  %s/p2p/%s\n", addr, h.ID())
-	}
+	// 5. Register Handler
+	h.SetStreamHandler(p2p.ProtocolID, p2p.ProviderStreamHandler(store))
 
-	// Register a simple stream handler for local loopback verification
-	h.SetStreamHandler(p2p.ProtocolID, func(s network.Stream) {
-		logger.Info().Str("remote_peer", s.Conn().RemotePeer().String()).Msg("Incoming stream")
-		
-		buf := make([]byte, 1024)
-		n, err := s.Read(buf)
-		if err != nil && err != io.EOF {
-			logger.Error().Err(err).Msg("Failed to read from stream")
-			s.Reset()
-			return
-		}
-
-		msg := string(buf[:n])
-		logger.Info().Str("msg", msg).Msg("Received message")
-
-		// Echo back
-		reply := fmt.Sprintf("Hello from provider %s! I received: %s", h.ID(), msg)
-		if _, err := s.Write([]byte(reply)); err != nil {
-			logger.Error().Err(err).Msg("Failed to write to stream")
-			s.Reset()
-			return
-		}
-
-		s.Close()
-	})
-
-	// Wait for interrupt signal
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
-
-	logger.Info().Msg("Shutting down provider")
+	// 6. Wait for sigint
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	<-ch
+	fmt.Println("Shutting down...")
 }

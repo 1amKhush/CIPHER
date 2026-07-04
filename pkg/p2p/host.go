@@ -103,6 +103,11 @@ func loadOrGeneratePrivateKey(path string) (crypto.PrivKey, error) {
 	return priv, nil
 }
 
+// GetHostPrivateKey returns the private key for the given host.
+func GetHostPrivateKey(h host.Host) crypto.PrivKey {
+	return h.Peerstore().PrivKey(h.ID())
+}
+
 type discoveryNotifee struct {
 	h host.Host
 }
