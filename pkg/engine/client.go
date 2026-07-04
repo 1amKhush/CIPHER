@@ -3,6 +3,8 @@ package engine
 import (
 	"errors"
 	"fmt"
+
+	"github.com/1amKhush/CIPHER/pkg/chunker"
 	"github.com/1amKhush/CIPHER/pkg/crypto"
 	"github.com/1amKhush/CIPHER/pkg/wire"
 )
