@@ -20,7 +20,14 @@ import (
 func main() {
 	port := flag.Int("port", 9000, "Port to listen on")
 	relayAddr := flag.String("relay", "", "Relay multiaddr to connect to (optional)")
+	verbose := flag.Bool("verbose", false, "Enable verbose debug logging")
 	flag.Parse()
+
+	cfg := logger.DefaultConfig()
+	if *verbose {
+		cfg.Level = "debug"
+	}
+	logger.Init(cfg)
 
 	// 1. Create a dummy file for MVP if it doesn't exist
 	fileName := "test_file.txt"

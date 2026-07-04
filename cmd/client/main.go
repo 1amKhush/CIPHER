@@ -17,9 +17,14 @@ func main() {
 	rootHex := flag.String("root", "", "Merkle root in hex")
 	chunksCount := flag.Uint64("chunks", 4, "Number of chunks to download")
 	relayAddr := flag.String("relay", "", "Relay multiaddr to connect to (optional)")
+	verbose := flag.Bool("verbose", false, "Enable verbose debug logging")
 	flag.Parse()
 
-	logger.Init(logger.DefaultConfig())
+	cfg := logger.DefaultConfig()
+	if *verbose {
+		cfg.Level = "debug"
+	}
+	logger.Init(cfg)
 
 	if *providerAddr == "" || *rootHex == "" {
 		logger.Fatal().Msg("-provider and -root flags are required")
@@ -62,7 +67,7 @@ func main() {
 	privKey := p2p.GetHostPrivateKey(h)
 
 	var fileID [32]byte // zeroed
-	
+
 	outFile, err := os.Create("downloaded_file.txt")
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create output file")
@@ -74,13 +79,13 @@ func main() {
 		if err != nil {
 			logger.Fatal().Err(err).Msgf("Failed to request chunk %d", i)
 		}
-		
+
 		if _, err := outFile.Write(plaintext); err != nil {
 			logger.Fatal().Err(err).Msgf("Failed to write chunk %d to file", i)
 		}
-		
+
 		logger.Info().Msgf("Successfully downloaded chunk %d (%d bytes)", i, len(plaintext))
 	}
-	
+
 	logger.Info().Msg("File download complete!")
 }
