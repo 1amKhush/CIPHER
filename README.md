@@ -1,46 +1,63 @@
-# CIPHER
+# 🌐 CIPHER
 
-CDNs are owned by a handful of companies. CIPHER is the alternative - a decentralized content delivery protocol where math replaces the middleman.
+> **CDNs are owned by a handful of companies. CIPHER is the alternative — a decentralized content delivery protocol where math replaces the middleman.**
 
-## CIPHER v5 MVP - Zero-Cost P2P Transport
+CIPHER is a peer-to-peer content delivery network designed to bypass centralized intermediaries. It allows users to securely share, verify, and stream files directly between one another using advanced cryptographic integrity checks and automated network hole-punching.
 
-This MVP demonstrates a direct, end-to-end encrypted file transfer between two isolated peers (behind NATs/firewalls) using Libp2p's circuit relay and hole-punching mechanisms, verified by a Merkle Tree.
+Whether you're behind a restrictive NAT or simply want to share data without relying on a corporate tunnel, CIPHER ensures your data is delivered safely and authentically.
 
-### Demo Instructions
+## 🌟 Highlights
 
-To run the demo, you will need two separate terminal windows. For a true test of hole-punching, run them on two different networks (e.g., your home Wi-Fi and a mobile hotspot).
+*   **Decentralized by Design**: No central authority controls your data.
+*   **Zero-Config Networking**: Built-in Libp2p hole-punching (DCUtR) effortlessly connects peers across isolated networks and firewalls.
+*   **Cryptographic Integrity**: Keccak256-based Merkle trees guarantee that every byte received is exactly what was requested.
+*   **Secure Transport**: All file chunks are encrypted in transit using robust AES-256-GCM symmetric cryptography.
+*   **Multi-Protocol**: Automatically negotiates the best connection via QUIC, TCP, or Secure WebSockets.
+
+## 🚀 Usage
+
+CIPHER works by spinning up a **Provider** to serve data, and a **Client** to request it. Here is a minimal example of how to securely transfer a file across two completely separate networks using a public relay:
 
 **1. Start the Provider**
-The provider will create a dummy 100KB file (`test_file.txt`), chunk it, encrypt it, build a Merkle tree, and connect to the public relay to await requests.
+The provider will initialize the data, generate a cryptographic Merkle tree for integrity, and reserve a connection slot on a public relay.
 
 ```bash
-go run ./cmd/provider -relay /dns4/relay-torrentium-3zok.onrender.com/tcp/443/wss/p2p/12D3KooWEBxhvkASAJtmdeKWiWWhdXCzwXEVvSMpjuY8YrDAi68Z -verbose
+go run ./cmd/provider -relay /dns4/relay-torrentium-3zok.onrender.com/tcp/443/wss/p2p/12D3KooWEBxhvkASAJtmdeKWiWWhdXCzwXEVvSMpjuY8YrDAi68Z
 ```
-
-Wait for it to output the `Root` hash and the `Successfully reserved slot on relay: ...` message. It will also print its Peer ID (e.g., `12D3KooW...`).
+*Note the `Root` hash and the `Peer ID` outputted in the terminal.*
 
 **2. Start the Client**
-In another terminal (or on another machine), run the client. You need to pass the provider's full relay multiaddress and the Merkle root hash.
-
-Construct the provider multiaddress by appending `/p2p-circuit/p2p/<PROVIDER_PEER_ID>` to the relay address.
+From a different network, run the client. Provide the provider's full relay address (append `/p2p-circuit/p2p/<PROVIDER_PEER_ID>`) and the Merkle root hash.
 
 ```bash
 go run ./cmd/client \
   -provider /dns4/relay-torrentium-3zok.onrender.com/tcp/443/wss/p2p/12D3KooWEBxhvkASAJtmdeKWiWWhdXCzwXEVvSMpjuY8YrDAi68Z/p2p-circuit/p2p/<PROVIDER_PEER_ID> \
   -root <MERKLE_ROOT_HASH> \
-  -chunks 4 \
-  -verbose
+  -chunks 4
 ```
 
-**Example:**
+The client will automatically negotiate a direct hole-punched connection if possible, stream the encrypted chunks, verify the cryptographic proof, and reassemble the file locally. 
+
+*(For deep diagnostic logs during transport, simply append the `--verbose` flag to either command!)*
+
+## ⬇️ Installation
+
+Currently, CIPHER is built from source. Ensure you have [Go](https://golang.org/doc/install) installed on your system.
+
+Clone the repository and build the binaries:
+
 ```bash
-go run ./cmd/client -provider /dns4/relay-torrentium-3zok.onrender.com/tcp/443/wss/p2p/12D3KooWEBxhvkASAJtmdeKWiWWhdXCzwXEVvSMpjuY8YrDAi68Z/p2p-circuit/p2p/12D3KooWRLLKMNyUgQADWFivKBCRBprPM9BmeA8mV1i5XcwXeqFE -root e8a5757c212a4f78667a2dd306c4cae63bd281816947f9cacc55ff7fa3e5db50 -chunks 4 -verbose
+# Clone the repository
+git clone https://github.com/1amKhush/CIPHER.git
+cd CIPHER
+
+# Build the client and provider executables
+go build -o provider ./cmd/provider
+go build -o client ./cmd/client
 ```
 
-The client will connect through the relay, negotiate a hole-punch if possible, request the chunks, decrypt them, verify them against the Merkle root, and save the result as `downloaded_file.txt`.
+## 💭 Feedback & Contributing
 
-### Architecture Features
-* **Chunking & Encryption**: AES-256-GCM symmetric encryption for every 32KB chunk.
-* **Merkle Integrity**: Keccak256-based Merkle tree ensures that every decrypted byte belongs to the original file.
-* **Transport**: QUIC, TCP, and Secure WebSockets over Libp2p.
-* **Hole-Punching**: Libp2p `circuitv2` relay bootstrapping with automatic DCUtR (Direct Connection Upgrade through Relay).
+We are building CIPHER to make a lasting impact on how data is distributed across the internet, and community feedback is everything. 
+
+If you find this project interesting, have a feature request, or run into an issue, please don't hesitate to open an [Issue](https://github.com/1amKhush/CIPHER/issues) or start a discussion. Pull requests are always welcome! 
